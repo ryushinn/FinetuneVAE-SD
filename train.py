@@ -58,7 +58,15 @@ class DataModule(pl.LightningDataModule):
         self.size = size
         self.setup('fit')
     def setup(self, stage):
-        all_images = sorted([u for u in os.listdir(self.data_dir) if u.endswith(".png") or u.endswith(".jpg")])
+        all_images = []
+        for root, dirs, files in os.walk(self.data_dir):
+            files = sorted([f for f in files if f.endswith(".png") or f.endswith(".jpg")])
+            prefix_paths = os.path.relpath(root, self.data_dir)
+            files = [os.path.join(prefix_paths, f) for f in files]
+            all_images.extend(files)
+
+        print(all_images[:3])
+        # all_images = sorted([u for u in os.listdir(self.data_dir) if u.endswith(".png") or u.endswith(".jpg")])
         random.shuffle(all_images)
         train_size = int((1-self.val_size)*len(all_images))
         train_images = all_images[:train_size]
@@ -185,12 +193,13 @@ class FinetuneVAE(pl.LightningModule):
             img2 = img2.cpu().detach().numpy().transpose(1, 2, 0)
             img1 = (img1 + 1) / 2
             img2 = (img2 + 1) / 2
+            img1, img2 = img1.clip(0.0, 1.0), img2.clip(0.0, 1.0)
             diff = abs(img1 - img2)
             img = np.concatenate([img1, img2, diff], axis=1)
             img = (img * 255).astype(np.uint8)
             img = Image.fromarray(img)
             os.makedirs(self.log_dir + "/" + str(self.current_epoch), exist_ok=True)
-            img.save(os.path.join(self.log_dir, str(self.current_epoch), name))
+            img.save(os.path.join(self.log_dir, str(self.current_epoch), os.path.basename(name)))
         self.log_one_batch = True
     def train_epoch_end(self, outputs):
         if self.use_ema:
@@ -241,6 +250,7 @@ def argument_inputs():
                         default='',)
     args =  parser.parse_args()
     args.n_gpus = len(os.environ["CUDA_VISIBLE_DEVICES"].split(","))
+    print(args.n_gpus)
     args.devices = [i for i in range(args.n_gpus)]
     args.strategy = "ddp" #"ddp"
     return args
