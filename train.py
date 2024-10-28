@@ -22,6 +22,7 @@ import lpips
 from ldm.util import   instantiate_from_config
 from ldm.modules.ema import LitEma
 from contextlib import contextmanager
+from diffusers import AutoencoderKL
 
 torch.cuda.empty_cache()
 
@@ -94,9 +95,13 @@ class FinetuneVAE(pl.LightningModule):
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.optim = optim
-        self.model =  instantiate_from_config(vae_config)
-        self.model.load_state_dict(vae_weights, strict=True)
-        self.model.train()
+        # self.model =  instantiate_from_config(vae_config)
+        # self.model.load_state_dict(vae_weights, strict=True)
+
+        url = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/blob/main/vae-ft-mse-840000-ema-pruned.safetensors"  # can also be a local file
+        self.model = AutoencoderKL.from_single_file(url)
+        self.model.encoder.requires_grad_(False)
+
         self.precision = precision
         self.log_dir = log_dir
         self.log_one_batch = False
@@ -274,4 +279,5 @@ if __name__ == '__main__':
     
 
     trainer.fit(model, datamodule=data_module)
-    torch.save(model.model.state_dict(), f"{log_dir}/last_model.pth")
+    # torch.save(model.model.state_dict(), f"{log_dir}/last_model.pth")
+    model.model.save_pretrained(f"{log_dir}/last_model.pth")
